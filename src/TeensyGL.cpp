@@ -27,6 +27,10 @@
 #elif __has_include(<ST7735_t3.h>) 
 	#include "ST7735_t3.h"
 	#define ST7735 1
+#elif __has_include(<RA8876_t3.h>) 
+	#include "Ra8876_Lite.h"
+	#include "RA8876_t3.h"
+	#define RA8876 1
 
 #endif
 
@@ -56,6 +60,10 @@ Teensy_OpenGL::Teensy_OpenGL(const uint8_t CSp,const uint8_t RSTp,const uint8_t 
   Teensy_OpenGL::Teensy_OpenGL(uint8_t CS, uint8_t RS, uint8_t RST) : ST7789_t3( CS,  RS,  RST)
   {
   }
+#elif defined(RA8876)
+Teensy_OpenGL::Teensy_OpenGL(const uint8_t CSp,const uint8_t RSTp,const uint8_t mosi_pin,const uint8_t sclk_pin,const uint8_t miso_pin) : RA8876_t3( CSp, RSTp, mosi_pin, sclk_pin, miso_pin) 
+{
+}
 #endif
 
 /* Aux functions */
@@ -639,9 +647,9 @@ void Teensy_OpenGL::glEnd(void) {
 	}
 	
     else if(glDrawMode == GL_QUADS) {
-      // 0---2---4
-      // |   |   |
-      // 1---3---5
+      // 0---3   4---6
+      // |   |   |   |
+      // 1---2   5---7
 
         /* TODO Improve! */
         if(glVerticesCount < 4 && (glVerticesCount % 4 == 0))
@@ -750,11 +758,11 @@ void Teensy_OpenGL::glEnd(void) {
 				if(facing_camera(p,q,r) > 0)		
 				//if (glVertices[i].nz >= 0)
 					shadeTriangleSmooth ( px[i], py[i],
-							  px[i + 1], py[i + 1], i,
-							  px[i + 2], py[i + 2], glColor, glColor, glColor);
+						px[i + 1], py[i + 1], px[i + 2], py[i + 2], i,
+						glColor, glColor, glColor);
 					shadeTriangleSmooth ( px[i+2], py[i+2],
-							  px[i + 1], py[i + 1], i,
-							  px[i+3], py[i+3], glColor, glColor, glColor);
+						px[i + 1], py[i + 1], px[i+3], py[i+3], i,
+						glColor, glColor, glColor);
 			}
 		}
 		else {
@@ -780,7 +788,153 @@ void Teensy_OpenGL::glEnd(void) {
 			}
 		}		
     }
-	
+    else if(glDrawMode == GL_QUAD_STRIP) {
+      // 0---2---4---6
+      // |   |   |   |
+      // 1---3---5---7
+
+        /* TODO Improve! */
+        if(glVerticesCount < 4 && (glVerticesCount % 4 == 0))
+            return;
+        
+        int px[MAX_VERTICES], py[MAX_VERTICES];
+            
+        for(uint8_t i = 0; i < glVerticesCount; i++) {
+            
+            if(!(glVertices[i].z >= -1.0 && glVertices[i].z <= 1.0))
+                return;
+            
+            GLVertex * aux = &(glVertices[i]);
+            
+            px[i] = (((aux->x + 1.0)/2.0) * (frameWidth - 1));
+            py[i] = ((1.0 - ((aux->y + 1.0)/2.0)) * (frameHeight - 1));
+        }
+        
+		NFACES = (glVerticesCount/2 ) - 1;
+		
+		if(glShader == SimpleVertexShader) {
+			updateDrawingOrder(NFACES, glVertices, draw_order);
+			for(uint16_t quad = 0; quad < NFACES; quad++){
+				//uint16_t i = quad*4;
+				uint16_t order = draw_order? draw_order[quad]:quad;  //face to draw
+				uint16_t i = order*2;
+
+				float p[3], q[3], r[3];
+				// if triangle is facing the camera, draw it
+				p[0] = glVertices[i].x;   p[1] = glVertices[i].y;   p[2] = glVertices[i].z;
+				q[0] = glVertices[i+1].x; q[1] = glVertices[i+1].y; q[2] = glVertices[i+1].z;
+				r[0] = glVertices[i+2].x; r[1] = glVertices[i+2].y; r[2] = glVertices[i+2].z;
+
+				if(facing_camera(p,q,r) > 0){
+					shadeTriangle(px[i], py[i], px[i+1], py[i+1], px[i+2], py[i+2], glColor_T[i], glColor_T[i+1], glColor_T[i+2]);
+					shadeTriangle(px[i+2], py[i+2], px[i+1], py[i+1], px[i+3], py[i+3], glColor_T[i+2], glColor_T[i+1], glColor_T[i+3]);
+				}
+			}
+		} 
+		else if(glShader == FacetShader){
+			//vertex normals and normalization
+			updateDrawingOrder(NFACES, glVertices, draw_order);
+			//face_normals(draw_order);
+			face_normals();
+			vertex_normalize();
+			
+			float normColor;
+			for(uint16_t quad = 0; quad < NFACES; quad++) {
+				uint16_t order = draw_order? draw_order[quad]:quad;  //face to draw
+				uint16_t i = order*2;
+				normColor = (glVertices[i].nz < 0?0:glVertices[i].nz);
+				
+				if(normColor <0.001 && glVertices[i].nz != 0 ) normColor = abs(glVertices[i].nz);
+				//normColor = abs(glVertices[i].nz);
+				uint16_t color = (((uint8_t)(normColor* _r) & 0xF8) << 8) | (((uint8_t)(normColor* _g) & 0xFC) << 3) | ((uint8_t)((normColor* _b)) >> 3);
+				/*
+				Serial.printf("Indicies %d, %d, %d\n", i, i+1, i+2);
+				Serial.printf("\t %d, %d, %d, %f, %x\n", i, px[i], py[i],
+					glVertices[i].nz, normColor* _r);
+				Serial.printf("\t %d, %d, %d, %f, %x\n", i+1, px[i+1], py[i+1],
+					glVertices[i+1].nz, normColor* _g);
+				Serial.printf("\t %d, %d, %d, %f, %x\n", i+2, px[i+2], py[i+2],
+					glVertices[i+2].nz, normColor* _b);
+				*/
+				float p[3], q[3], r[3];
+				// if triangle is facing the camera, draw it
+				p[0] = glVertices[i].x;   p[1] = glVertices[i].y;   p[2] = glVertices[i].z;
+				q[0] = glVertices[i+1].x; q[1] = glVertices[i+1].y; q[2] = glVertices[i+1].z;
+				r[0] = glVertices[i+2].x; r[1] = glVertices[i+2].y; r[2] = glVertices[i+2].z;
+
+				if(facing_camera(p,q,r) > 0){
+				//if (glVertices[i].nz >= 0)
+					fillTriangle ( px[i], py[i],
+							  px[i + 1], py[i + 1],
+							  px[i + 2], py[i + 2], color);
+					fillTriangle ( px[i+2], py[i+2],
+							  px[i + 1], py[i + 1],
+							  px[i + 3], py[i +3], color);
+				}
+			}
+		}
+		else if(glShader == SmoothShader) {		
+			//face normals and normalization
+			updateDrawingOrder(NFACES, glVertices, draw_order);
+			//face_normals(draw_order);
+			face_normals();
+			
+			if(glShaderName == "Gourand") {
+				//vertex normals based on shared vertices
+				findSharedVerts(glVerticesCount, NFACES, 4);
+				computeVerticeNormal();
+			}
+			
+			vertex_normalize();
+			
+			for(uint16_t trig = 0; trig < NFACES; trig++) {
+				uint16_t order = draw_order? draw_order[trig]:trig;  //face to draw
+				uint16_t i = order;
+				
+				float p[3], q[3], r[3];
+				// if triangle is facing the camera, draw it
+				// if triangle is facing the camera, draw it
+				p[0] = glVertices[i].x;   p[1] = glVertices[i].y;   p[2] = glVertices[i].z;
+				q[0] = glVertices[i+1].x; q[1] = glVertices[i+1].y; q[2] = glVertices[i+1].z;
+				r[0] = glVertices[i+2].x; r[1] = glVertices[i+2].y; r[2] = glVertices[i+2].z;
+
+				if(facing_camera(p,q,r) > 0){					
+				//if (glVertices[i].nz >= 0)
+					shadeTriangleSmooth ( px[i], py[i],
+						px[i + 1], py[i + 1], px[i + 2], py[i + 2], i,
+						glColor, glColor, glColor);
+					shadeTriangleSmooth ( px[i+2], py[i+2],
+						px[i + 1], py[i + 1], px[i+3], py[i+3], i,
+						glColor, glColor, glColor);
+				}
+			}
+		}
+		else {
+			//breaking the quad up into triangles allows for shading and fills
+			// 0---2---4
+			// |   |   |
+			// 1---3---5
+			for(uint16_t quad = 0; quad < (NFACES); quad++){
+				uint16_t ptIdx = quad*2;
+				uint16_t i = ptIdx;
+				if(color_default_array == 0){
+						drawLine(px[i], py[i], px[i + 1], py[i + 1], glColor_T[i]);
+						drawLine(px[i + 1], py[i + 1], px[i + 2], py[i + 2], glColor_T[i+1]);drawLine(px[i+2], py[i+2], px[i], py[i], glColor_T[i+2]);
+
+						drawLine(px[i+2], py[i+2], px[i + 1], py[i + 1], glColor_T[i+2]);
+						drawLine(px[i+1], py[i+1], px[i+3], py[i+3], glColor_T[i+1]);
+						drawLine(px[i+3], py[i+3], px[i + 2], py[i + 2], glColor_T[i+3]);
+				} else {
+						fillTriangle ( px[i], py[i],
+								  px[i + 1], py[i + 1],
+								  px[i + 2], py[i + 2], glColor);
+						fillTriangle ( px[i+2], py[i+2],
+								  px[i + 1], py[i + 1],
+								  px[i + 3], py[i + 3], glColor);
+				}
+			}
+		}		
+    }
     else if(glDrawMode == GL_POLYGON) {
 
         /* TODO Improve! */
@@ -828,8 +982,19 @@ void Teensy_OpenGL::glEnd(void) {
             
             px[i] = (((aux->x + 1.0)/2.0) * (frameWidth - 1));
             py[i] = ((1.0 - ((aux->y + 1.0)/2.0)) * (frameHeight - 1));
-        }
 
+        }
+		
+		  glAttribute.max_x = glAttribute.max_x = px[0];
+		  glAttribute.min_y = glAttribute.max_y = py[0];
+		  for (int i = 0; i < glVerticesCount; i++) {
+			if (px[i] < glAttribute.min_x) glAttribute.min_x = px[i];
+			if (px[i] > glAttribute.max_x) glAttribute.max_x = px[i];
+			if (py[i] < glAttribute.min_y) glAttribute.min_y = py[i];
+			if (py[i] > glAttribute.max_y) glAttribute.max_y = py[i];
+		  }
+		glAttribute.size_x = glAttribute.max_x-glAttribute.min_x;
+		glAttribute.size_y = glAttribute.max_y-glAttribute.min_y;
  
 		if(glShader == SimpleVertexShader) {
 
@@ -949,7 +1114,7 @@ void Teensy_OpenGL::glEnd(void) {
 			float normColor;
 			for(uint16_t trig = 0; trig < NFACES; trig++) {
 				uint16_t order = draw_order? draw_order[trig]:trig;  //face to draw
-				uint16_t i = order*3;
+				uint16_t i = order;
 				
 				normColor = (glVertices[i].nz < 0?0:glVertices[i].nz);
 				if(normColor <0.001 && glVertices[i].nz != 0 ) normColor = abs(glVertices[i].nz);
@@ -961,11 +1126,17 @@ void Teensy_OpenGL::glEnd(void) {
 				q[0] = glVertices[i+1].x; q[1] = glVertices[i+1].y; q[2] = glVertices[i+1].z;
 				r[0] = glVertices[i+2].x; r[1] = glVertices[i+2].y; r[2] = glVertices[i+2].z;
 			
-				//Serial.println(facing_camera(p,q,r));
-				if(facing_camera(p,q,r) > 0)
+				float cameraTest;
+				if(i % 2) {
+					cameraTest = facing_camera(p,q,r);
+				} else {
+					cameraTest = facing_camera(q,p,r);
+				}
+				if(cameraTest > 0){
 					fillTriangle ( px[i], py[i],
 						  px[i + 1], py[i + 1],
-						  px[i + 2], py[i + 2], color);
+						  px[i + 2], py[i + 2], color);						  
+				}
 			}
 		}
 		else if(glShader == SmoothShader) {		
@@ -982,9 +1153,9 @@ void Teensy_OpenGL::glEnd(void) {
 			
 			vertex_normalize();
 			
-			for(uint16_t trig = 0; trig < glVerticesCount / 3; trig++) {
+			for(uint16_t trig = 0; trig < NFACES; trig++) {
 				uint16_t order = draw_order? draw_order[trig]:trig;  //face to draw
-				uint16_t i = order*3;
+				uint16_t i = order;
 
 				float p[3], q[3], r[3];
 				// if triangle is facing the camera, draw it
@@ -992,16 +1163,23 @@ void Teensy_OpenGL::glEnd(void) {
 				q[0] = glVertices[i+1].x; q[1] = glVertices[i+1].y; q[2] = glVertices[i+1].z;
 				r[0] = glVertices[i+2].x; r[1] = glVertices[i+2].y; r[2] = glVertices[i+2].z;
 
-				if(facing_camera(p,q,r) > 0)
+				float cameraTest;
+				if(i % 2) {
+					cameraTest = facing_camera(p,q,r);
+				} else {
+					cameraTest = facing_camera(q,p,r);
+				}
+				if(cameraTest > 0){
 					shadeTriangleSmooth ( px[i], py[i],
 						px[i + 1], py[i + 1],
 						px[i + 2], py[i + 2], i, glColor, glColor, glColor);
+				}
 			}
 		}
 
 		else {
-			for(uint16_t trig = 0; trig < ((uint8_t) (glVerticesCount / 3)); trig++){
-				uint16_t i = trig*3;
+			for(uint16_t trig = 0; trig < (glVerticesCount  - 2); trig++){
+				uint16_t i = trig;
 				if(color_default_array == 0){
 						drawLine(px[i], py[i], px[i + 1], py[i + 1], glColor_T[i]);
 						drawLine(px[i+1], py[i+1], px[i + 2], py[i + 2], glColor_T[i+1]);
@@ -1042,13 +1220,12 @@ FLASHMEM
 void Teensy_OpenGL::face_normals() 
 { 		
 	 float ba[3], ca[3];
-	 float vn[3];
+	 float vn[4];
 	 uint16_t ptIdx;
 
-	for(uint8_t j = 0; j< 3; j++) vn[j] = 0.0;
-	
- 
-	if( glDrawMode == GL_TRIANGLES ||  glDrawMode == GL_QUADS) {	
+	for(uint8_t j = 0; j< 4; j++) vn[j] = 0.0;
+
+	if( glDrawMode == GL_TRIANGLES ||  glDrawMode == GL_QUADS || glDrawMode == GL_QUAD_STRIP) {	
 		 for( int i=0; i < NFACES; i++ )
 		 {
 			//uint8_t ptIdx = i*3;
@@ -1056,6 +1233,8 @@ void Teensy_OpenGL::face_normals()
 			if(glDrawMode == GL_QUADS) {
 				//ptIdx = order*4;
 				ptIdx = i * 4;
+			} else if( glDrawMode == GL_QUAD_STRIP){
+				ptIdx = i * 2;
 			} else {
 				//ptIdx = order*3;
 				ptIdx = i *3;
@@ -1086,12 +1265,11 @@ void Teensy_OpenGL::face_normals()
 			glVertices[ptIdx+2].ny = vn[1];
 			glVertices[ptIdx+2].nz = vn[2];
 			
-			if(glDrawMode == GL_QUADS) {
+			if(glDrawMode == GL_QUADS || glDrawMode == GL_QUAD_STRIP) {
 				glVertices[ptIdx+3].nx = vn[0]; 
 				glVertices[ptIdx+3].ny = vn[1];
 				glVertices[ptIdx+3].nz = vn[2];
 			}
-			
 			//Serial.printf("\tVn: (%d) %f, %f, %f\n", i, glVertices[ptIdx].nx , glVertices[ptIdx].ny, glVertices[ptIdx].nz);
 		 }
 
@@ -1105,16 +1283,19 @@ void Teensy_OpenGL::face_normals()
 			//Serial.printf("Points:%d %f, %f, %f\n", i, glVertices[i+1].x,glVertices[ptIdx+1].y, glVertices[ptIdx+1].z);
 			//Serial.printf("Points:%d %f, %f, %f\n", i, glVertices[ptIdx+2].x,glVertices[ptIdx+2].y, glVertices[ptIdx+2].z);
 
-			ba[0] = glVertices[ptIdx+1].x - glVertices[ptIdx].x;
-			ba[1] = glVertices[ptIdx+1].y - glVertices[ptIdx].y;		
-			ba[2] = glVertices[ptIdx+1].z - glVertices[ptIdx].z;
 
-			ca[0] = glVertices[ptIdx+2].x - glVertices[ptIdx].x;
-			ca[1] = glVertices[ptIdx+2].y - glVertices[ptIdx].y;		
-			ca[2] = glVertices[ptIdx+2].z - glVertices[ptIdx].z;
-			
-			//vertex normals
-			crossVector3(vn, ba, ca);
+				ba[0] = glVertices[ptIdx+1].x - glVertices[ptIdx].x;
+				ba[1] = glVertices[ptIdx+1].y - glVertices[ptIdx].y;		
+				ba[2] = glVertices[ptIdx+1].z - glVertices[ptIdx].z;
+
+				ca[0] = glVertices[ptIdx+2].x - glVertices[ptIdx].x;
+				ca[1] = glVertices[ptIdx+2].y - glVertices[ptIdx].y;		
+				ca[2] = glVertices[ptIdx+2].z - glVertices[ptIdx].z;
+				
+				//vertex normals
+				crossVector3(vn, ba, ca);
+				
+			if(i % 2 == 0) vn[2] = -vn[2];
 			
 			glVertices[ptIdx].nx = vn[0]; 
 			glVertices[ptIdx].ny = vn[1];
@@ -1417,10 +1598,10 @@ void Teensy_OpenGL::shadeTriangleSmooth (
 	uint16_t idx0 = idx;
 	uint16_t idx1 = idx+1;
 	uint16_t idx2 = idx+2;
+	
     if (y0 > y1) { swapGL(y0, y1); swapGL(x0, x1); swapGL(color0,color1); swapGL(idx0, idx1);}
     if (y1 > y2) { swapGL(y2, y1); swapGL(x2, x1); swapGL(color2,color1); swapGL(idx2, idx1);}
     if (y0 > y1) { swapGL(y0, y1); swapGL(x0, x1); swapGL(color0,color1); swapGL(idx0, idx1);}
-	//Serial.printf("p0: %d, %d / p1: %d, %d / p2: %d, %d\n", x0, y0, x1, y1, x2, y2);
 
 
 	if(y0 == y2) { // Handle awkward all-on-same-line case as its own thing
@@ -1686,11 +1867,12 @@ void Teensy_OpenGL::computeTriangleDepths(uint16_t nt, GLVertex *vertices, uint1
     //uint16_t nt = NFACES;
     float p,q,r,s;
 	uint16_t idx;
-	
-	if(glDrawMode == GL_QUADS){
+
+	if(glDrawMode == GL_QUADS || glDrawMode == GL_QUAD_STRIP){
 		for (int j=0; j < nt; j++) {
 			int i = draw_order!=NULL? draw_order[j]:j;
-			idx = j*4;
+			if(glDrawMode == GL_QUADS) idx = j*4;
+			if(glDrawMode == GL_QUAD_STRIP) idx = j*2;
 			p = vertices[idx].z;
 			q = vertices[idx+1].z;
 			r = vertices[idx+2].z;
@@ -1700,10 +1882,11 @@ void Teensy_OpenGL::computeTriangleDepths(uint16_t nt, GLVertex *vertices, uint1
 			float z = (p+q+r+s)/4;
 			depths[j] = z;
 		}
-	} else if(glDrawMode == GL_TRIANGLES){
+	} else if(glDrawMode == GL_TRIANGLES || glDrawMode == GL_TRIANGLE_STRIP){
 		for (int j=0; j < nt; j++) {
 			int i = draw_order!=NULL? draw_order[j]:j;
-			idx = j*3;
+			if(glDrawMode == GL_TRIANGLES) idx = j*3;
+			if(glDrawMode == GL_TRIANGLE_STRIP) idx = j;
 			p = vertices[idx].z;
 			q = vertices[idx+1].z;
 			r = vertices[idx+2].z;

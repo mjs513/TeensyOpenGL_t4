@@ -31,6 +31,9 @@
 #elif __has_include(<ST7735_t3.h>)
 	#include "ST7735_t3.h"
 	#define ST7735 1
+#elif __has_include(<RA8876_t3.h>)
+	#include "RA8876_t3.h"
+	#define RA8876 1
 #else
 	error "no device selected"
 #endif
@@ -61,6 +64,7 @@ typedef enum {
 	GL_LINE_STRIP,
 	GL_LINE_LOOP,
     GL_QUADS,
+	GL_QUAD_STRIP,
 	GL_POLYGON,
 	GL_TRIANGLES,
     GL_TRIANGLE_STRIP
@@ -110,6 +114,11 @@ typedef struct {
 	float nx, ny, nz;	// vertex normals per face vertex count - 2
 } GLVertex;
 
+typedef struct {
+    int min_x, min_y;   // vertex points
+	int max_x, max_y;
+	int size_x, size_y;	// vertex normals per face vertex count - 2
+} GLAttribute;
 
 #define MAX_VERTICES 950*3
 #define MAX_MATRICES 8
@@ -147,6 +156,11 @@ class Teensy_OpenGL : public ST7789_t3
 public:
   Teensy_OpenGL(uint8_t CS, uint8_t RS, uint8_t SID, uint8_t SCLK, uint8_t RST = -1);
   Teensy_OpenGL(uint8_t CS, uint8_t RS, uint8_t RST = -1);
+#elif defined(RA8876)
+class Teensy_OpenGL : public  RA8876_t3
+{
+public:
+  Teensy_OpenGL(const uint8_t CSp,const uint8_t RSTp=255,const uint8_t mosi_pin=11,const uint8_t sclk_pin=13,const uint8_t miso_pin=12);
 #endif
 
 	void copyMatrix(float * dest, float * src);
@@ -196,6 +210,8 @@ public:
 	GLShader glShader = NONE;
 	GLVertex *glVertices = (GLVertex*)malloc(sizeof(GLVertex) * MAX_VERTICES);
 	//GLVertex glVertices[MAX_VERTICES];
+	GLAttribute glAttribute;
+	
 	unsigned glVerticesCount = 0;
 	
 	uint16_t draw_order[MAX_VERTICES/3];
