@@ -2,11 +2,10 @@
 //#include "ST7789_t3.h"
 #include "ILI9341_t3n.h"
 #include <TeensyGL.h> 
-#include "T4_PowerButton.h"
 
 //UNCOMMENT THE MODEL YOU WANT TO USE
-#include "teapot_high_res.h"
-//#include "teapot_low_res.h"
+//#include "teapot_high_res.h"
+#include "teapot_low_res.h"
 //#include "monkey_high_res.h"
 //#include "small_bunny.h"
 
@@ -41,7 +40,7 @@
 #define TFT_CS  10
 
 // Use hardware SPI (on Uno, #13, #12, #11) and the above for CS/DC
-Teensy_OpenGL tft = Teensy_OpenGL(TFT_CS, TFT_DC, 8);
+Teensy_OpenGL tft = Teensy_OpenGL(TFT_CS, TFT_DC);
 uint8_t use_fb = 1;
 
 #define PI_ 3.14159265358979323846
@@ -60,7 +59,6 @@ void setup() {
   Serial.begin(9600);
   while (!Serial) ; // wait for Arduino Serial Monitor
   Serial.println("OpenGL Test!"); 
-  flexRamInfo();
 
   delay(1000);
 

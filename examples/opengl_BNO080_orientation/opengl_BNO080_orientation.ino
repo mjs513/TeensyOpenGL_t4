@@ -1,7 +1,6 @@
 #include "SPI.h"
 #include "ILI9488_t3.h"
 #include <TeensyGL.h> 
-#include "T4_PowerButton.h"
 
 #include <Wire.h>
 #include "SparkFun_BNO080_Arduino_Library.h"
@@ -49,7 +48,6 @@ void setup() {
   Serial.begin(9600);
   while (!Serial) ; // wait for Arduino Serial Monitor
   Serial.println("OpenGL Test!"); 
-  flexRamInfo();
 
   Serial.begin(9600);
   Serial.println();

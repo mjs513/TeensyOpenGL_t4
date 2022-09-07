@@ -2,7 +2,6 @@
 //#include "ST7789_t3.h"
 #include "ILI9341_t3n.h"
 #include <TeensyGL.h> 
-#include "T4_PowerButton.h"
 
 float angle = -0.;
 
@@ -31,7 +30,6 @@ void setup() {
   Serial.begin(9600);
   while (!Serial) ; // wait for Arduino Serial Monitor
   Serial.println("OpenGL Test!"); 
-  flexRamInfo();
 
   delay(1000);
 
