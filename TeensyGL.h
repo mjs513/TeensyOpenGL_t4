@@ -34,6 +34,9 @@
 #elif __has_include(<RA8876_t3.h>)
 	#include "RA8876_t3.h"
 	#define RA8876 1
+#elif __has_include(<ILI948x_t4x_p.h>)
+	#include "ILI948x_t4x_p.h"
+	#define ILI948X 1 
 #else
 	error "no device selected"
 #endif
@@ -161,6 +164,11 @@ class Teensy_OpenGL : public  RA8876_t3
 {
 public:
   Teensy_OpenGL(const uint8_t CSp,const uint8_t RSTp=255,const uint8_t mosi_pin=11,const uint8_t sclk_pin=13,const uint8_t miso_pin=12);
+#elif defined(ILI948X)
+class Teensy_OpenGL : public  ILI948x_t4x_p
+{
+public:
+  Teensy_OpenGL(int8_t dc, int8_t cs = -1, int8_t rst = -1);
 #endif
 
 	void copyMatrix(float * dest, float * src);

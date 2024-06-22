@@ -31,11 +31,17 @@
 	#include "Ra8876_Lite.h"
 	#include "RA8876_t3.h"
 	#define RA8876 1
-
+#elif __has_include(<ILI948x_t4x_p.h>)
+	#include "ILI948x_t4x_p.h"
+	#define ILI948X 1
 #endif
 
 #if defined(ILI9488)
 Teensy_OpenGL::Teensy_OpenGL(SPIClass *SPIWire, uint8_t _CS, uint8_t _DC, uint8_t _RST, uint8_t _MOSI, uint8_t _SCLK, uint8_t _MISO) : ILI9488_t3(SPIWire, _CS, _DC, _RST, _MOSI, _SCLK, _MISO) 
+{
+}
+#elif defined(ILI948X)
+Teensy_OpenGL::Teensy_OpenGL(int8_t dc, int8_t cs, int8_t rst) : ILI948x_t4x_p(dc, cs, rst) 
 {
 }
 #elif defined(ILI9341)
@@ -61,9 +67,9 @@ Teensy_OpenGL::Teensy_OpenGL(const uint8_t CSp,const uint8_t RSTp,const uint8_t 
   {
   }
 #elif defined(RA8876)
-Teensy_OpenGL::Teensy_OpenGL(const uint8_t CSp,const uint8_t RSTp,const uint8_t mosi_pin,const uint8_t sclk_pin,const uint8_t miso_pin) : RA8876_t3( CSp, RSTp, mosi_pin, sclk_pin, miso_pin) 
-{
-}
+  Teensy_OpenGL::Teensy_OpenGL(const uint8_t CSp,const uint8_t RSTp,const uint8_t mosi_pin,const uint8_t sclk_pin,const uint8_t miso_pin) : RA8876_t3( CSp, RSTp, mosi_pin, sclk_pin, miso_pin) 
+  {
+  }
 #endif
 
 /* Aux functions */
